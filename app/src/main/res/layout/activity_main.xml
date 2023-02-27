@@ -7,7 +7,7 @@
     tools:context=".MainActivity">
 
     <ImageView
-        android:id="@+id/imagePreview"
+        android:id="@+id/imagePreView"
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintBottom_toTopOf="@+id/ll_action_btns"
@@ -35,7 +35,7 @@
             android:src="@drawable/ic_gallery" />
 
         <ImageButton
-            android:id="@+id/ib_brush"
+            android:id="@+id/ib_camera"
             android:layout_width="75dp"
             android:layout_height="75dp"
             android:layout_margin="15dp"
