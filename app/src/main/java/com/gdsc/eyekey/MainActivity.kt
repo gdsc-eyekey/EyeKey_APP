@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.media.Image
+import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
@@ -44,7 +45,10 @@ import java.util.*
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
     private var imageView:ImageView? = null
+    private var recorder: MediaRecorder? = null
     var customnProgressDialog : Dialog? = null
+    private var outputPath: String? = null
+    private var state : Boolean = false
 
     // 파일 불러오기
     private val getContentImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -71,7 +75,9 @@ class MainActivity : AppCompatActivity() {
     private val permissionList = arrayOf(
         android.Manifest.permission.CAMERA,
         android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-        android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        android.Manifest.permission.RECORD_AUDIO
+    )
 
     // 권한을 허용하도록 요청
     private val requestMultiplePermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
@@ -104,7 +110,11 @@ class MainActivity : AppCompatActivity() {
 
         val ibMike : ImageButton = findViewById(R.id.ib_mike)
         ibMike.setOnClickListener{
-            //Todo add mike function
+            if(!state){
+                startRecord()
+            }else{
+                stopRecord()
+            }
         }
 
     }
@@ -135,4 +145,38 @@ class MainActivity : AppCompatActivity() {
         customnProgressDialog?.show()
     }
 
+    private fun startRecord(){
+
+        val fileName: String = Date().getTime().toString() + ".mp3"
+
+        outputPath = Environment.getExternalStorageDirectory().absolutePath + "/Download/" + fileName //내장메모리 밑에 위치
+        recorder = MediaRecorder()
+        recorder?.setAudioSource((MediaRecorder.AudioSource.MIC))
+        recorder?.setOutputFormat((MediaRecorder.OutputFormat.MPEG_4))
+        recorder?.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+        recorder?.setOutputFile(outputPath)
+
+        try {
+            recorder?.prepare()
+            recorder?.start()
+            state = true
+            Toast.makeText(this, "녹음이 시작되었습니다.", Toast.LENGTH_SHORT).show()
+        } catch (e: IllegalStateException){
+            e.printStackTrace()
+        } catch (e: IOException){
+            e.printStackTrace()
+        }
+    }
+
+    private fun stopRecord(){
+        if(state){
+            recorder?.stop()
+            recorder?.reset()
+            recorder?.release()
+            state = false
+            Toast.makeText(this, "녹음이 되었습니다.", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "녹음 상태가 아닙니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
 }
