@@ -41,7 +41,7 @@ import java.io.IOException
 import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.*
-
+import com.gdsc.eyekey.FileUploadUtils
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
     private var imageView:ImageView? = null
@@ -49,7 +49,8 @@ class MainActivity : AppCompatActivity() {
     var customnProgressDialog : Dialog? = null
     private var outputPath: String? = null
     private var state : Boolean = false
-
+    private var imageUri: Uri? = null
+    private var soundUri: Uri? = null
     // 파일 불러오기
     private val getContentImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if(uri!=null){
@@ -155,6 +156,10 @@ class MainActivity : AppCompatActivity() {
         recorder?.setOutputFormat((MediaRecorder.OutputFormat.MPEG_4))
         recorder?.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
         recorder?.setOutputFile(outputPath)
+        if(outputPath!=null){
+            soundUri = Uri.fromFile(File(outputPath))
+        }
+
 
         try {
             recorder?.prepare()
@@ -175,8 +180,32 @@ class MainActivity : AppCompatActivity() {
             recorder?.release()
             state = false
             Toast.makeText(this, "녹음이 되었습니다.", Toast.LENGTH_SHORT).show()
+
+            //사진 파일 전송
+            if(pictureUri!=null){
+                val imageFile = File(pictureUri!!.getPath())
+                FileUploadUtils.send2Server(imageFile, "file1")
+                Toast.makeText(this, "사진 파일 ${pictureUri}이 전송되었습니다.", Toast.LENGTH_SHORT).show()
+            }
+            else{
+                Toast.makeText(this, "사진 파일 ${pictureUri}이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
+            }
+
+            //음성 파일 전송
+            if(soundUri!=null){
+                val recordFile = File(soundUri!!.getPath())
+                FileUploadUtils.send2Server(recordFile, "file2")
+                Toast.makeText(this, "음성 파일 ${soundUri}이 전송되었습니다.", Toast.LENGTH_SHORT).show()
+            }
+            else{
+                Toast.makeText(this, "음성 파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
+            }
+
+
         } else {
             Toast.makeText(this, "녹음 상태가 아닙니다.", Toast.LENGTH_SHORT).show()
         }
     }
+
+
 }
