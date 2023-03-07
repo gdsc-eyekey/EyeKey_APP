@@ -19,7 +19,7 @@ object FileUploadUtils {
             .addFormDataPart(name, file.name, RequestBody.create(MultipartBody.FORM, file))
             .build()
         val request: Request = Request.Builder()
-            .url("http://127.0.0.1:80/upload") // Server URL 은 본인 IP를 입력
+            .url("http://34.64.59.193:5000/uploader") // Server URL 은 본인 IP를 입력
             .post(requestBody)
             .build()
         val client = OkHttpClient()

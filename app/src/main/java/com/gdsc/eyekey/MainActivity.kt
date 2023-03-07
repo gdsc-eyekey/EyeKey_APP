@@ -42,6 +42,7 @@ import java.lang.Exception
 import java.text.SimpleDateFormat
 import java.util.*
 import com.gdsc.eyekey.FileUploadUtils
+import com.gdsc.eyekey.FileDownloadUtils
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
     private var imageView:ImageView? = null
@@ -51,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var state : Boolean = false
     private var imageUri: Uri? = null
     private var soundUri: Uri? = null
+    private var resultUri: Uri? = null
     // 파일 불러오기
     private val getContentImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if(uri!=null){
@@ -114,9 +116,18 @@ class MainActivity : AppCompatActivity() {
             if(!state){
                 startRecord()
             }else{
-                stopRecord()
+                showProgressDialog()
+                    lifecycleScope.launch(){
+                    stopRecord()
+                }
+                val imageBackground:ImageView = findViewById(R.id.imagePreView)
+                if(resultUri !=null) {
+                    imageBackground.setImageURI(resultUri)
+                }
             }
         }
+
+
 
     }
     private fun createImageFile(): Uri? {
@@ -145,12 +156,16 @@ class MainActivity : AppCompatActivity() {
         customnProgressDialog?.setContentView(R.layout.dialog_custom_progress)
         customnProgressDialog?.show()
     }
-
+    private fun cancelProgressDiaglog(){
+        if(customnProgressDialog != null){
+            customnProgressDialog?.dismiss()
+            customnProgressDialog = null
+        }
+    }
     private fun startRecord(){
 
         val fileName: String = Date().getTime().toString() + ".mp3"
-
-        outputPath = Environment.getExternalStorageDirectory().absolutePath + "/Download/" + fileName //내장메모리 밑에 위치
+        outputPath = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI.toString() + fileName //내장메모리 밑에 위치
         recorder = MediaRecorder()
         recorder?.setAudioSource((MediaRecorder.AudioSource.MIC))
         recorder?.setOutputFormat((MediaRecorder.OutputFormat.MPEG_4))
@@ -173,7 +188,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopRecord(){
+    private suspend fun stopRecord(){
         if(state){
             recorder?.stop()
             recorder?.reset()
@@ -182,6 +197,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "녹음이 되었습니다.", Toast.LENGTH_SHORT).show()
 
             //사진 파일 전송
+            cancelProgressDiaglog()
             if(pictureUri!=null){
                 val imageFile = File(pictureUri!!.getPath())
                 FileUploadUtils.send2Server(imageFile, "file1")
@@ -201,11 +217,17 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "음성 파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
             }
 
+            //파일다운로드 후 setting
+            try{
+                resultUri = FileDownloadUtils.dowload4Server()
+            }
+            catch(e: Exception){
+                resultUri = null
+            }
 
         } else {
             Toast.makeText(this, "녹음 상태가 아닙니다.", Toast.LENGTH_SHORT).show()
         }
     }
-
 
 }
