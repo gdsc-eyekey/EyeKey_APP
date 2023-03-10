@@ -6,7 +6,6 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" android:required="true"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:required="true"/>
 
     <application
         android:allowBackup="true"
@@ -30,12 +29,12 @@
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.gdsc.eyekey"
+            android:authorities="com.gdsc.eyekey.fileProvider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_path"></meta-data>
+                android:resource="@xml/file_path"/>
         </provider>
     </application>
 

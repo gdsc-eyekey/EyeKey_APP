@@ -8,7 +8,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 
-object FileDownloadUtils {
+class FileDownloadUtils {
 
     fun dowload4Server(): Uri? {
         val request: Request = Request.Builder()

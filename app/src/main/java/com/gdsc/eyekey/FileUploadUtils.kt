@@ -12,12 +12,13 @@ import java.io.File
 import java.io.IOException
 
 
-object FileUploadUtils {
-    fun send2Server(file: File, name: String) {
+class FileUploadUtils {
+    fun send2Server(file: File, name: String){
         val requestBody: RequestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(name, file.name, RequestBody.create(MultipartBody.FORM, file))
             .build()
+
         val request: Request = Request.Builder()
             .url("http://34.64.59.193:5000/uploader") // Server URL 은 본인 IP를 입력
             .post(requestBody)
