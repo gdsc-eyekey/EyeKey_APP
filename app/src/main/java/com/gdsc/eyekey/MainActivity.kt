@@ -63,7 +63,8 @@ class MainActivity : AppCompatActivity() {
     private val permissionList = arrayOf(
         android.Manifest.permission.CAMERA,
         android.Manifest.permission.READ_EXTERNAL_STORAGE,
-        android.Manifest.permission.RECORD_AUDIO
+        android.Manifest.permission.RECORD_AUDIO,
+        android.Manifest.permission.INTERNET
     )
 
     // 권한을 허용하도록 요청
