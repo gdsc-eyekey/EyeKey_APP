@@ -3,6 +3,7 @@ package com.gdsc.eyekey
 import android.R.attr.bitmap
 import android.app.AlertDialog
 import android.app.Dialog
+import android.content.ContentValues
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
@@ -20,7 +21,14 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.*
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.provider.MediaStore
 import android.util.Log
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import retrofit2.Call
+import retrofit2.Response
+import java.text.SimpleDateFormat
 
 
 class MainActivity : AppCompatActivity() {
@@ -31,16 +39,16 @@ class MainActivity : AppCompatActivity() {
     private var outputPath: String? = null
     private var state : Boolean = false
 
+    var pictureUri: Uri? = null
     private var soundUri: Uri? = null
     private var resultUri: Uri? = null
 
-    private var FileUploadUtils = FileUploadUtils()
-    private var FileDownloadUtils = FileDownloadUtils()
 
 
     // 파일 불러오기
     private val getContentImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if(uri!=null){
+            pictureUri = uri
             uri.let { binding?.imagePreView?.setImageURI(uri)}
             val imageBackground:ImageView = findViewById(R.id.imagePreView)
             imageBackground.setImageURI(uri)
@@ -50,7 +58,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // 카메라를 실행한 후 찍은 사진을 저장
-    var pictureUri: Uri? = null
+
     private val getTakePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) {
         if(it) {
             pictureUri.let { binding?.imagePreView?.setImageURI(pictureUri) }
@@ -82,7 +90,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         binding = ActivityMainBinding.inflate(layoutInflater)
-
         requestMultiplePermission.launch(permissionList)
 
         val ibGallery : ImageButton = findViewById(R.id.ib_gallery)
@@ -101,10 +108,7 @@ class MainActivity : AppCompatActivity() {
             if(!state){
                 startRecord()
             }else{
-//                showProgressDialog()
-                    lifecycleScope.launch(){
-                    stopRecord()
-                }
+                stopRecord()
                 val imageBackground:ImageView = findViewById(R.id.imagePreView)
                 if(resultUri !=null) {
                     imageBackground.setImageURI(resultUri)
@@ -119,17 +123,12 @@ class MainActivity : AppCompatActivity() {
     //사진 저장 부분, 내부 캐시 이용
     private fun createImageFile(): Uri? {
 //        // save bitmap to cache directory
-//        try {
-//            val cachePath: File = File(getCacheDir(), "images")
-//            cachePath.mkdirs() // don't forget to make the directory
-//            val stream = FileOutputStream("$cachePath/image.png") // overwrites this image every time
-//            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-//            stream.close()
-//        } catch (e: IOException) {
-//            e.printStackTrace()
-//        }
-        return null
-
+        val now = SimpleDateFormat("yyMMdd_HHmmss").format(Date())
+        val content = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "img_$now.jpg")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpg")
+        }
+        return contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, content)
     }
 
     private fun showRationalDialog(
@@ -181,7 +180,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun stopRecord(){
+    private fun stopRecord(){
         if(state){
             recorder?.stop()
             recorder?.reset()
@@ -190,35 +189,30 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "녹음이 되었습니다.", Toast.LENGTH_SHORT).show()
 
             //사진 파일 전송
-//            if(pictureUri!=null){
-//                val imageFile = File(pictureUri)
-//                FileUploadUtils.send2Server(imageFile, "file1")
-//                Toast.makeText(this, "사진 파일이 전송되었습니다.", Toast.LENGTH_SHORT).show()
-//            }
-//            else{
-//                Toast.makeText(this, "사진 파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
-//            }
+            if(pictureUri!=null && soundUri!=null){
+                val imageFile = File(pictureUri!!.path)
+                val requestImg = RequestBody.create("image/jpeg".toMediaTypeOrNull(), imageFile)
+                val file1 = MultipartBody.Part.createFormData("file1", "file1", requestImg)
 
-            //음성 파일 전송
-            if(soundUri!=null){
                 val recordFile = File(soundUri!!.getPath())
-                if(recordFile != null){
-                    FileUploadUtils.send2Server(recordFile, "file2")
-                    Toast.makeText(this, "음성 파일 ${soundUri}이 전송되었습니다.", Toast.LENGTH_SHORT).show()
-                    Log.d("POST", "${soundUri}")
-                }
+                val requestAudio = RequestBody.create("audio/mpeg".toMediaTypeOrNull(), recordFile)
+                val file2 = MultipartBody.Part.createFormData("file2", "file2", requestAudio)
+
+                val result = RetrofitClient.service.uploadImage(file1, file2)
+                Log.d("response", "결과는 ${result.toString()}")
+                
+
+
+                val imageBackground:ImageView = findViewById(R.id.imagePreView)
+//                imageBackground.setImageBitmap(resultImg.)
+
+
+                Toast.makeText(this, "파일이 전송되었습니다.", Toast.LENGTH_SHORT).show()
             }
             else{
-                Toast.makeText(this, "음성 파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
             }
 
-            //파일다운로드 후 setting
-            try{
-                resultUri = FileDownloadUtils.dowload4Server()
-            }
-            catch(e: Exception){
-                resultUri = null
-            }
 //            cancelProgressDiaglog()
         } else {
             Toast.makeText(this, "녹음 상태가 아닙니다.", Toast.LENGTH_SHORT).show()
