@@ -16,26 +16,17 @@ import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
 
-    private const val URL = "http://34.64.59.193:5000"
+    private const val URL = "http://34.64.59.193:5000/"
 
     private val retrofit = Retrofit.Builder()
             .baseUrl(URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
 
-    val service: RetrofitAPI = retrofit.create(RetrofitAPI::class.java)
-
+    val api: APIs = retrofit.create(APIs::class.java)
 }
 
-interface RetrofitAPI {
-    @Multipart
-    @POST("/uploader")
-    suspend fun uploadImage(
-        @Part file1: MultipartBody.Part,
-        @Part file2: MultipartBody.Part
-    ): String
 
-}
 
 
 

@@ -25,44 +25,47 @@ import android.graphics.BitmapFactory
 import android.provider.MediaStore
 import android.util.Log
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.Call
+import retrofit2.HttpException
 import retrofit2.Response
 import java.text.SimpleDateFormat
 
 
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
-    private var imageView:ImageView? = null
+    private var imageView: ImageView? = null
     private var recorder: MediaRecorder? = null
-    var customnProgressDialog : Dialog? = null
+    var customnProgressDialog: Dialog? = null
     private var outputPath: String? = null
-    private var state : Boolean = false
+    private var state: Boolean = false
 
     var pictureUri: Uri? = null
     private var soundUri: Uri? = null
     private var resultUri: Uri? = null
 
 
-
     // 파일 불러오기
-    private val getContentImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if(uri!=null){
-            pictureUri = uri
-            uri.let { binding?.imagePreView?.setImageURI(uri)}
-            val imageBackground:ImageView = findViewById(R.id.imagePreView)
-            imageBackground.setImageURI(uri)
+    private val getContentImage =
+        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                pictureUri = uri
+                uri.let { binding?.imagePreView?.setImageURI(uri) }
+                val imageBackground: ImageView = findViewById(R.id.imagePreView)
+                imageBackground.setImageURI(uri)
+            }
+
+
         }
-
-
-    }
 
     // 카메라를 실행한 후 찍은 사진을 저장
 
     private val getTakePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) {
-        if(it) {
+        if (it) {
             pictureUri.let { binding?.imagePreView?.setImageURI(pictureUri) }
-            val imageBackground:ImageView = findViewById(R.id.imagePreView)
+            val imageBackground: ImageView = findViewById(R.id.imagePreView)
             imageBackground.setImageURI(pictureUri)
         }
     }
@@ -76,14 +79,15 @@ class MainActivity : AppCompatActivity() {
     )
 
     // 권한을 허용하도록 요청
-    private val requestMultiplePermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        results.forEach {
-            if(!it.value) {
-                Toast.makeText(applicationContext, "권한 허용 필요", Toast.LENGTH_SHORT).show()
-                finish()
+    private val requestMultiplePermission =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            results.forEach {
+                if (!it.value) {
+                    Toast.makeText(applicationContext, "권한 허용 필요", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
             }
         }
-    }
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,30 +96,29 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         requestMultiplePermission.launch(permissionList)
 
-        val ibGallery : ImageButton = findViewById(R.id.ib_gallery)
-        ibGallery.setOnClickListener{
+        val ibGallery: ImageButton = findViewById(R.id.ib_gallery)
+        ibGallery.setOnClickListener {
             getContentImage.launch("image/*")
         }
 
-        val ibCamera : ImageButton = findViewById(R.id.ib_camera)
-        ibCamera.setOnClickListener{
+        val ibCamera: ImageButton = findViewById(R.id.ib_camera)
+        ibCamera.setOnClickListener {
             pictureUri = createImageFile()
             getTakePicture.launch(pictureUri)
         }
 
-        val ibMike : ImageButton = findViewById(R.id.ib_mike)
-        ibMike.setOnClickListener{
-            if(!state){
+        val ibMike: ImageButton = findViewById(R.id.ib_mike)
+        ibMike.setOnClickListener {
+            if (!state) {
                 startRecord()
-            }else{
+            } else {
                 stopRecord()
-                val imageBackground:ImageView = findViewById(R.id.imagePreView)
-                if(resultUri !=null) {
+                val imageBackground: ImageView = findViewById(R.id.imagePreView)
+                if (resultUri != null) {
                     imageBackground.setImageURI(resultUri)
                 }
             }
         }
-
 
 
     }
@@ -132,18 +135,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showRationalDialog(
-        title: String, message: String){
+        title: String, message: String
+    ) {
         val builder: AlertDialog.Builder = AlertDialog.Builder(this)
         builder.setTitle(title)
             .setMessage(message)
-            .setPositiveButton("Cancle"){
-                    dialog, _ -> dialog.dismiss()
+            .setPositiveButton("Cancle") { dialog, _ ->
+                dialog.dismiss()
             }
         builder.create().show()
     }
 
 
-//    private fun showProgressDialog(){
+    //    private fun showProgressDialog(){
 //        customnProgressDialog = Dialog(this@MainActivity)
 //        customnProgressDialog?.setContentView(R.layout.dialog_custom_progress)
 //        customnProgressDialog?.show()
@@ -154,16 +158,17 @@ class MainActivity : AppCompatActivity() {
 //            customnProgressDialog = null
 //        }
 //    }
-    private fun startRecord(){
+    private fun startRecord() {
 
         val fileName: String = Date().getTime().toString() + ".mp3"
-        outputPath = Environment.getExternalStorageDirectory().absolutePath + "/Download/" + fileName  + fileName //내장메모리 밑에 위치
+        outputPath =
+            Environment.getExternalStorageDirectory().absolutePath + "/Download/" + fileName + fileName //내장메모리 밑에 위치
         recorder = MediaRecorder()
         recorder?.setAudioSource((MediaRecorder.AudioSource.MIC))
         recorder?.setOutputFormat((MediaRecorder.OutputFormat.MPEG_4))
         recorder?.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
         recorder?.setOutputFile(outputPath)
-        if(outputPath!=null){
+        if (outputPath != null) {
             soundUri = Uri.fromFile(File(outputPath))
         }
 
@@ -173,15 +178,15 @@ class MainActivity : AppCompatActivity() {
             recorder?.start()
             state = true
             Toast.makeText(this, "녹음이 시작되었습니다.", Toast.LENGTH_SHORT).show()
-        } catch (e: IllegalStateException){
+        } catch (e: IllegalStateException) {
             e.printStackTrace()
-        } catch (e: IOException){
+        } catch (e: IOException) {
             e.printStackTrace()
         }
     }
 
-    private fun stopRecord(){
-        if(state){
+    private fun stopRecord() {
+        if (state) {
             recorder?.stop()
             recorder?.reset()
             recorder?.release()
@@ -189,27 +194,18 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "녹음이 되었습니다.", Toast.LENGTH_SHORT).show()
 
             //사진 파일 전송
-            if(pictureUri!=null && soundUri!=null){
-                val imageFile = File(pictureUri!!.path)
-                val requestImg = RequestBody.create("image/jpeg".toMediaTypeOrNull(), imageFile)
-                val file1 = MultipartBody.Part.createFormData("file1", "file1", requestImg)
+            if (pictureUri != null && soundUri != null) {
+                val file1 = File(pictureUri!!.path)
+                val file2 = File(soundUri!!.path)
 
-                val recordFile = File(soundUri!!.getPath())
-                val requestAudio = RequestBody.create("audio/mpeg".toMediaTypeOrNull(), recordFile)
-                val file2 = MultipartBody.Part.createFormData("file2", "file2", requestAudio)
-
-                val result = RetrofitClient.service.uploadImage(file1, file2)
-                Log.d("response", "결과는 ${result.toString()}")
-                
+                Log.d("POST Result", uploadFiles(file1, file2))
 
 
-                val imageBackground:ImageView = findViewById(R.id.imagePreView)
+//                val imageBackground: ImageView = findViewById(R.id.imagePreView)
 //                imageBackground.setImageBitmap(resultImg.)
 
-
                 Toast.makeText(this, "파일이 전송되었습니다.", Toast.LENGTH_SHORT).show()
-            }
-            else{
+            } else {
                 Toast.makeText(this, "파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
             }
 
@@ -219,4 +215,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    fun uploadFiles(file1: File, file2: File): String {
+        // 파일을 RequestBody로 변환
+        val imageRequestBody1 = file1.asRequestBody("image/png".toMediaTypeOrNull())
+        val audioRequestBody2 = file2.asRequestBody("audio/mpeg".toMediaTypeOrNull())
+
+        // MultipartBody.Part로 변환
+        val filePart1 = MultipartBody.Part.createFormData("file1", file1.name, imageRequestBody1)
+        val filePart2 = MultipartBody.Part.createFormData("file2", file2.name, audioRequestBody2)
+
+        // 파일 업로드
+        val response: Call<ResultImg> = RetrofitClient.api.uploadFiles(filePart1, filePart2)
+
+        return response.toString()
+    }
 }
