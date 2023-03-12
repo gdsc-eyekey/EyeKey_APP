@@ -5,8 +5,9 @@ import java.io.File
 
 data class ResultImg(
     @SerializedName("resultImg")
-    private val resultImg: String){
-    override fun toString() = "PostResult{ ${resultImg}}}"
-}
+    var resultImg: String
+
+)
+
 
 

@@ -4,6 +4,7 @@ import android.R.attr.bitmap
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.ContentValues
+import android.content.ContentValues.TAG
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
@@ -31,8 +32,12 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.Call
 import retrofit2.HttpException
 import retrofit2.Response
+import java.io.InputStreamReader
+import java.nio.file.Paths
 import java.text.SimpleDateFormat
-
+import android.content.Context
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
@@ -42,7 +47,7 @@ class MainActivity : AppCompatActivity() {
     private var outputPath: String? = null
     private var state: Boolean = false
 
-    var pictureUri: Uri? = null
+    private var pictureUri: Uri? = null
     private var soundUri: Uri? = null
     private var resultUri: Uri? = null
 
@@ -74,8 +79,7 @@ class MainActivity : AppCompatActivity() {
     private val permissionList = arrayOf(
         android.Manifest.permission.CAMERA,
         android.Manifest.permission.READ_EXTERNAL_STORAGE,
-        android.Manifest.permission.RECORD_AUDIO,
-        android.Manifest.permission.INTERNET
+        android.Manifest.permission.RECORD_AUDIO
     )
 
     // 권한을 허용하도록 요청
@@ -84,7 +88,6 @@ class MainActivity : AppCompatActivity() {
             results.forEach {
                 if (!it.value) {
                     Toast.makeText(applicationContext, "권한 허용 필요", Toast.LENGTH_SHORT).show()
-                    finish()
                 }
             }
         }
@@ -198,12 +201,38 @@ class MainActivity : AppCompatActivity() {
                 val file1 = File(pictureUri!!.path)
                 val file2 = File(soundUri!!.path)
 
-                Log.d("POST Result", uploadFiles(file1, file2))
+                val imageRequestBody1 = file1.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                val audioRequestBody2 = file2.asRequestBody("audio/mpeg".toMediaTypeOrNull())
+                val filePart1 = MultipartBody.Part.createFormData("file1", file1.name, imageRequestBody1)
+                val filePart2 = MultipartBody.Part.createFormData("file2", file2.name, audioRequestBody2)
+
+                Toast.makeText(this, "파일 ${file1}.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "파일 ${file2}.", Toast.LENGTH_SHORT).show()
+                val retrofit = Retrofit.Builder()
+                    .baseUrl("http://34.64.228.205:5000/")
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build()
+
+                val api: APIs = retrofit.create(APIs::class.java)
+
+                val callResultImg = api.uploadFiles(filePart2,filePart2)
+
+                callResultImg.enqueue(object : retrofit2.Callback<ResultImg>{
+                    override fun onResponse(
+                        call: Call<ResultImg>,
+                        response: Response<ResultImg>
+                    ) {
+                        Log.d(TAG, "성공 : ${response.raw()}")
+                    }
+
+                    override fun onFailure(call: Call<ResultImg>, t: Throwable) {
+                        Log.d(TAG, "실패 : $t")
+                    }
+                })
 
 
 //                val imageBackground: ImageView = findViewById(R.id.imagePreView)
 //                imageBackground.setImageBitmap(resultImg.)
-
                 Toast.makeText(this, "파일이 전송되었습니다.", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
@@ -213,20 +242,11 @@ class MainActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "녹음 상태가 아닙니다.", Toast.LENGTH_SHORT).show()
         }
+
     }
 
-    fun uploadFiles(file1: File, file2: File): String {
-        // 파일을 RequestBody로 변환
-        val imageRequestBody1 = file1.asRequestBody("image/png".toMediaTypeOrNull())
-        val audioRequestBody2 = file2.asRequestBody("audio/mpeg".toMediaTypeOrNull())
 
-        // MultipartBody.Part로 변환
-        val filePart1 = MultipartBody.Part.createFormData("file1", file1.name, imageRequestBody1)
-        val filePart2 = MultipartBody.Part.createFormData("file2", file2.name, audioRequestBody2)
 
-        // 파일 업로드
-        val response: Call<ResultImg> = RetrofitClient.api.uploadFiles(filePart1, filePart2)
 
-        return response.toString()
-    }
 }
+
