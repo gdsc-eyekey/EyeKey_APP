@@ -1,13 +1,18 @@
 package com.gdsc.eyekey
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.ContentValues
 import android.content.ContentValues.TAG
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.database.Cursor
+import android.graphics.ImageDecoder
 import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
@@ -16,7 +21,12 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.core.content.FileProvider.getUriForFile
 import com.gdsc.eyekey.databinding.ActivityMainBinding
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -31,76 +41,95 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 class MainActivity : AppCompatActivity() {
-    private var binding: ActivityMainBinding? = null
+
+    // ViewBinding
+    lateinit var binding : ActivityMainBinding
+
     private var imageView: ImageView? = null
     private var recorder: MediaRecorder? = null
     var customnProgressDialog: Dialog? = null
     private var outputPath: String? = null
     private var state: Boolean = false
 
-    private var pictureUri: Uri? = null
+    private var photoUri: Uri? = null
     private var soundUri: Uri? = null
     private var resultUri: Uri? = null
 
 
-    // 파일 불러오기
-    private val getContentImage =
-        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            if (uri != null) {
 
-                uri.let { binding?.imagePreView?.setImageURI(uri) }
-                val imageBackground: ImageView = findViewById(R.id.imagePreView)
-                imageBackground.setImageURI(uri)
-            }
-
-
-        }
-
-    // 카메라를 실행한 후 찍은 사진을 저장
-
-    private val getTakePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) {
-        if (it) {
-            pictureUri.let { binding?.imagePreView?.setImageURI(pictureUri) }
-            val imageBackground: ImageView = findViewById(R.id.imagePreView)
-            imageBackground.setImageURI(pictureUri)
-
-
-        }
-    }
 
     // 요청하고자 하는 권한들
-    private val permissionList = arrayOf(
+    private val PERMISSIONS = arrayOf(
         android.Manifest.permission.CAMERA,
         android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
         android.Manifest.permission.RECORD_AUDIO
     )
 
+    val PERMISSIONS_REQUEST = 100
+    private val CameraPermission = 300
+
     // 권한을 허용하도록 요청
-    private val requestMultiplePermission =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-            results.forEach {
-                if (!it.value) {
-                    Toast.makeText(applicationContext, "권한 허용 필요", Toast.LENGTH_SHORT).show()
-                }
+    private fun checkPermissions(permissions: Array<String>, permissionsRequest: Int): Boolean {
+        val permissionList : MutableList<String> = mutableListOf()
+        for(permission in permissions){
+            val result = ContextCompat.checkSelfPermission(this, permission)
+            if(result != PackageManager.PERMISSION_GRANTED){
+                permissionList.add(permission)
             }
         }
+        if(permissionList.isNotEmpty()){
+            ActivityCompat.requestPermissions(this, permissionList.toTypedArray(), PERMISSIONS_REQUEST)
+            return false
+        }
+        return true
+    }
 
-
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        for(result in grantResults){
+            if(result != PackageManager.PERMISSION_GRANTED){
+                Toast.makeText(this, "권한 승인이 필요합니다.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         binding = ActivityMainBinding.inflate(layoutInflater)
-        requestMultiplePermission.launch(permissionList)
+        val view = binding.root
+
+        checkPermissions(PERMISSIONS, PERMISSIONS_REQUEST)
 
         val ibGallery: ImageButton = findViewById(R.id.ib_gallery)
         ibGallery.setOnClickListener {
-            getContentImage.launch("image/*")
+
         }
 
         val ibCamera: ImageButton = findViewById(R.id.ib_camera)
         ibCamera.setOnClickListener {
-            pictureUri = createImageFile()
-            getTakePicture.launch(pictureUri)
+            val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+            val photoFile = File(
+                File("${filesDir}/image").apply{
+                    if(!this.exists()){
+                        this.mkdirs()
+                    }
+                },
+                newJpgFileName()
+            )
+            photoUri = FileProvider.getUriForFile(
+                        this,
+                "com.gdsc.eyekey.fileProvider",
+                photoFile
+            )
+            takePictureIntent.resolveActivity(packageManager)?.also{
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+                startActivityForResult(takePictureIntent, CameraPermission)
+            }
         }
 
         val ibMike: ImageButton = findViewById(R.id.ib_mike)
@@ -115,46 +144,31 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-
-
     }
 
-    //사진 저장 부분, 내부 캐시 이용
-    private fun createImageFile(): Uri? {
-//        // save bitmap to cache directory
-        val now = SimpleDateFormat("yyMMdd_HHmmss").format(Date())
-        val content = ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "img_$now.jpg")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/jpg")
-        }
-
-        return contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, content)
-    }
-
-    private fun showRationalDialog(
-        title: String, message: String
-    ) {
-        val builder: AlertDialog.Builder = AlertDialog.Builder(this)
-        builder.setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("Cancle") { dialog, _ ->
-                dialog.dismiss()
+    @RequiresApi(Build.VERSION_CODES.P)
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if(resultCode == Activity.RESULT_OK){
+            when(requestCode) {
+                CameraPermission -> {
+                    imageView = findViewById(R.id.imagePreView)
+                    val imageBitmap = photoUri?.let { ImageDecoder.createSource(this.contentResolver, it) }
+                    imageView?.setImageBitmap(imageBitmap?.let { ImageDecoder.decodeBitmap(it) })
+                    Toast.makeText(this, photoUri?.path, Toast.LENGTH_LONG).show()
+                }
             }
-        builder.create().show()
+        }
+    }
+
+    private fun newJpgFileName() : String {
+        val sdf = SimpleDateFormat("yyyyMMdd_HHmmss")
+        val filename = sdf.format(System.currentTimeMillis())
+        return "${filename}.jpg"
     }
 
 
-    //    private fun showProgressDialog(){
-//        customnProgressDialog = Dialog(this@MainActivity)
-//        customnProgressDialog?.setContentView(R.layout.dialog_custom_progress)
-//        customnProgressDialog?.show()
-//    }
-//    private fun cancelProgressDiaglog(){
-//        if(customnProgressDialog != null){
-//            customnProgressDialog?.dismiss()
-//            customnProgressDialog = null
-//        }
-//    }
+   //음성 녹음
     private fun startRecord() {
 
         val fileName: String = Date().getTime().toString() + ".mp3"
@@ -191,8 +205,8 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "녹음이 되었습니다.", Toast.LENGTH_SHORT).show()
 
             //사진 파일 전송
-            if (pictureUri != null && soundUri != null) {
-                val file1 = File(pictureUri!!.path)
+            if (photoUri != null && soundUri != null) {
+                val file1 = File(photoUri!!.path)
                 val file2 = File(soundUri!!.path)
 
                 val imageRequestBody1 = file1.asRequestBody("image/jpeg".toMediaTypeOrNull())
@@ -202,6 +216,7 @@ class MainActivity : AppCompatActivity() {
 
                 Toast.makeText(this, "파일 ${file1}.", Toast.LENGTH_SHORT).show()
                 Toast.makeText(this, "파일 ${file2}.", Toast.LENGTH_SHORT).show()
+
                 val retrofit = Retrofit.Builder()
                     .baseUrl("http://34.64.228.205:5000/")
                     .addConverterFactory(GsonConverterFactory.create())
@@ -211,16 +226,17 @@ class MainActivity : AppCompatActivity() {
 
                 val callResultImg = api.uploadFiles(filePart1,filePart2)
 
+
                 callResultImg.enqueue(object : retrofit2.Callback<ResultImg>{
                     override fun onResponse(
                         call: Call<ResultImg>,
                         response: Response<ResultImg>
                     ) {
-                        Log.d(TAG, "성공 : ${response.raw()}")
+                        Log.d("POST", "성공 : ${response.raw()}")
                     }
 
                     override fun onFailure(call: Call<ResultImg>, t: Throwable) {
-                        Log.d(TAG, "실패 : $t")
+                        Log.d("POST", "실패 : $t")
                     }
                 })
 
@@ -240,4 +256,3 @@ class MainActivity : AppCompatActivity() {
     }
 
 }
-
