@@ -1,43 +1,34 @@
 package com.gdsc.eyekey
 
-import android.R.attr.bitmap
+import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.ContentValues
 import android.content.ContentValues.TAG
+import android.database.Cursor
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.provider.MediaStore
+import android.util.Log
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import com.gdsc.eyekey.databinding.ActivityMainBinding
-import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.util.*
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.provider.MediaStore
-import android.util.Log
 import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.Call
-import retrofit2.HttpException
 import retrofit2.Response
-import java.io.InputStreamReader
-import java.nio.file.Paths
-import java.text.SimpleDateFormat
-import android.content.Context
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
     private var binding: ActivityMainBinding? = null
@@ -56,7 +47,7 @@ class MainActivity : AppCompatActivity() {
     private val getContentImage =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null) {
-                pictureUri = uri
+
                 uri.let { binding?.imagePreView?.setImageURI(uri) }
                 val imageBackground: ImageView = findViewById(R.id.imagePreView)
                 imageBackground.setImageURI(uri)
@@ -72,6 +63,8 @@ class MainActivity : AppCompatActivity() {
             pictureUri.let { binding?.imagePreView?.setImageURI(pictureUri) }
             val imageBackground: ImageView = findViewById(R.id.imagePreView)
             imageBackground.setImageURI(pictureUri)
+
+
         }
     }
 
@@ -134,6 +127,7 @@ class MainActivity : AppCompatActivity() {
             put(MediaStore.Images.Media.DISPLAY_NAME, "img_$now.jpg")
             put(MediaStore.Images.Media.MIME_TYPE, "image/jpg")
         }
+
         return contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, content)
     }
 
@@ -215,7 +209,7 @@ class MainActivity : AppCompatActivity() {
 
                 val api: APIs = retrofit.create(APIs::class.java)
 
-                val callResultImg = api.uploadFiles(filePart2,filePart2)
+                val callResultImg = api.uploadFiles(filePart1,filePart2)
 
                 callResultImg.enqueue(object : retrofit2.Callback<ResultImg>{
                     override fun onResponse(
@@ -244,9 +238,6 @@ class MainActivity : AppCompatActivity() {
         }
 
     }
-
-
-
 
 }
 
