@@ -271,8 +271,11 @@ class MainActivity : AppCompatActivity() {
                         response: Response<ResultImg>
                     ) {
                         Log.d("POST", "성공 : ${response.toString()}")
-                        val body = response.body()
-                        Log.d("POST", "test : ${body}")
+                        val body = response.body()?.let {
+                            val test = it.test
+                            Log.d("POST", "test : ${test}")
+                        }
+
 
                     }
 
