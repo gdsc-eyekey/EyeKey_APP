@@ -1,15 +1,10 @@
 package com.gdsc.eyekey
 
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
 import android.app.Dialog
-import android.content.ContentValues
-import android.content.ContentValues.TAG
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.database.Cursor
-import android.graphics.ImageDecoder
+import android.graphics.BitmapFactory
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
@@ -20,14 +15,13 @@ import android.util.Log
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import androidx.core.content.FileProvider.getUriForFile
 import com.gdsc.eyekey.databinding.ActivityMainBinding
+import com.google.gson.GsonBuilder
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -35,10 +29,12 @@ import retrofit2.Call
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.converter.scalars.ScalarsConverterFactory
 import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -46,15 +42,19 @@ class MainActivity : AppCompatActivity() {
     lateinit var binding : ActivityMainBinding
 
     private var imageView: ImageView? = null
-    private var recorder: MediaRecorder? = null
+
     var customnProgressDialog: Dialog? = null
+
+    //photo
+    private var mCurrentPhotoPath: String? = null
+    private var photoUri: Uri? = null
+
+    //record mp3
     private var outputPath: String? = null
     private var state: Boolean = false
-
-    private var photoUri: Uri? = null
     private var soundUri: Uri? = null
+    private var recorder: MediaRecorder? = null
     private var resultUri: Uri? = null
-
 
 
 
@@ -67,8 +67,7 @@ class MainActivity : AppCompatActivity() {
     )
 
     val PERMISSIONS_REQUEST = 100
-    private val CameraPermission = 300
-
+    private val REQUEST_TAKE_PHOTO = 100
     // 권한을 허용하도록 요청
     private fun checkPermissions(permissions: Array<String>, permissionsRequest: Int): Boolean {
         val permissionList : MutableList<String> = mutableListOf()
@@ -97,6 +96,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+    @RequiresApi(Build.VERSION_CODES.P)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -112,24 +112,8 @@ class MainActivity : AppCompatActivity() {
 
         val ibCamera: ImageButton = findViewById(R.id.ib_camera)
         ibCamera.setOnClickListener {
-            val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
-            val photoFile = File(
-                File("${filesDir}/image").apply{
-                    if(!this.exists()){
-                        this.mkdirs()
-                    }
-                },
-                newJpgFileName()
-            )
-            photoUri = FileProvider.getUriForFile(
-                        this,
-                "com.gdsc.eyekey.fileProvider",
-                photoFile
-            )
-            takePictureIntent.resolveActivity(packageManager)?.also{
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
-                startActivityForResult(takePictureIntent, CameraPermission)
-            }
+            captureCamera()
+            Log.d("mCurrentPhotoPath", "${mCurrentPhotoPath}")
         }
 
         val ibMike: ImageButton = findViewById(R.id.ib_mike)
@@ -146,34 +130,88 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.P)
+    //사진 임시파일 생성
+    @Throws(IOException::class)
+    fun createImageFile(): File? { // Create an image file name
+        val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
+        val imageFileName = "JPEG_$timeStamp.jpg"
+        var imageFile: File? = null
+        val storageDir = File(
+            Environment.getExternalStorageDirectory().toString()+"/Pictures",
+            "Eyekey"
+        )
+        if (!storageDir.exists()) {
+            Log.i("mCurrentPhotoPath", storageDir.toString())
+            storageDir.mkdirs()
+        }
+        imageFile = File(storageDir, imageFileName)
+        mCurrentPhotoPath = imageFile.absolutePath
+        return imageFile
+    }
+
+    //카메라 실행 및 데이터 전달
+    private fun captureCamera() {
+        val takePictureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        if (takePictureIntent.resolveActivity(packageManager) != null) {
+
+            var photoFile: File? = null
+            try {
+                photoFile = createImageFile()
+            } catch (ex: IOException) {
+                Log.e("captureCamera Error", ex.toString())
+                return
+            }
+            if (photoFile != null) { // getUriForFile의 두 번째 인자는 Manifest provier의 authorites와 일치해야 함
+                val providerURI =
+                    FileProvider.getUriForFile(this, "com.gdsc.eyekey.fileProvider", photoFile)
+                // 인텐트에 전달할 때는 FileProvier의 Return값인 content://로만!!, providerURI의 값에 카메라 데이터를 넣어 보냄
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, providerURI)
+                startActivityForResult(takePictureIntent, REQUEST_TAKE_PHOTO)
+            }
+        }
+    }
+    //카메라에서 찍은 사진 결과호출
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if(resultCode == Activity.RESULT_OK){
-            when(requestCode) {
-                CameraPermission -> {
-                    imageView = findViewById(R.id.imagePreView)
-                    val imageBitmap = photoUri?.let { ImageDecoder.createSource(this.contentResolver, it) }
-                    imageView?.setImageBitmap(imageBitmap?.let { ImageDecoder.decodeBitmap(it) })
-                    Toast.makeText(this, photoUri?.path, Toast.LENGTH_LONG).show()
+        when (requestCode) {
+            REQUEST_TAKE_PHOTO -> {
+                Log.i("REQUEST_TAKE_PHOTO", "${Activity.RESULT_OK}" + " " + "${resultCode}");
+                if (resultCode == RESULT_OK) {
+                    try {
+                        galleryAddPic();
+                    } catch (e: Exception) {
+                        Log.e("REQUEST_TAKE_PHOTO", e.toString());
+                    }
+
+                } else {
+                    Toast.makeText(this@MainActivity, "사진찍기를 취소하였습니다.", Toast.LENGTH_SHORT).show();
                 }
             }
         }
     }
-
-    private fun newJpgFileName() : String {
-        val sdf = SimpleDateFormat("yyyyMMdd_HHmmss")
-        val filename = sdf.format(System.currentTimeMillis())
-        return "${filename}.jpg"
+    //이미지 로컬폴더에 저장
+    private fun galleryAddPic() {
+        Log.i("galleryAddPic", "Call")
+        val mediaScanIntent: Intent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
+        // 해당 경로에 있는 파일을 객체화(새로 파일을 만든다는 것으로 이해하면 안 됨)
+        val f: File = File(mCurrentPhotoPath)
+        val contentUri: Uri = Uri.fromFile(f)
+        mediaScanIntent.setData(contentUri)
+        sendBroadcast(mediaScanIntent)
+        Toast.makeText(this, "사진이 앨범에 저장되었습니다.", Toast.LENGTH_SHORT).show()
+        if(mCurrentPhotoPath != null){
+            val imageBackground: ImageView = findViewById(R.id.imagePreView)
+            val myBitmap = BitmapFactory.decodeFile(mCurrentPhotoPath)
+            imageBackground.setImageBitmap(myBitmap)
+        }
     }
-
 
    //음성 녹음
     private fun startRecord() {
 
         val fileName: String = Date().getTime().toString() + ".mp3"
         outputPath =
-            Environment.getExternalStorageDirectory().absolutePath + "/Download/" + fileName + fileName //내장메모리 밑에 위치
+            Environment.getExternalStorageDirectory().absolutePath + "/Download/" +fileName //내장메모리 밑에 위치
         recorder = MediaRecorder()
         recorder?.setAudioSource((MediaRecorder.AudioSource.MIC))
         recorder?.setOutputFormat((MediaRecorder.OutputFormat.MPEG_4))
@@ -205,34 +243,37 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "녹음이 되었습니다.", Toast.LENGTH_SHORT).show()
 
             //사진 파일 전송
-            if (photoUri != null && soundUri != null) {
-                val file1 = File(photoUri!!.path)
+            if (mCurrentPhotoPath != null && soundUri != null) {
+                val file1 = File(mCurrentPhotoPath)
                 val file2 = File(soundUri!!.path)
-
+                Log.d("POST", file1.toString())
+                Log.d("POST", file2.toString())
                 val imageRequestBody1 = file1.asRequestBody("image/jpeg".toMediaTypeOrNull())
                 val audioRequestBody2 = file2.asRequestBody("audio/mpeg".toMediaTypeOrNull())
                 val filePart1 = MultipartBody.Part.createFormData("file1", file1.name, imageRequestBody1)
                 val filePart2 = MultipartBody.Part.createFormData("file2", file2.name, audioRequestBody2)
 
-                Toast.makeText(this, "파일 ${file1}.", Toast.LENGTH_SHORT).show()
-                Toast.makeText(this, "파일 ${file2}.", Toast.LENGTH_SHORT).show()
-
+                Log.d("POST", "${file1}")
+                var gson = GsonBuilder().setLenient().create()
                 val retrofit = Retrofit.Builder()
                     .baseUrl("http://34.64.228.205:5000/")
-                    .addConverterFactory(GsonConverterFactory.create())
+                    .addConverterFactory(ScalarsConverterFactory.create())
+                    .addConverterFactory(GsonConverterFactory.create(gson))
                     .build()
 
                 val api: APIs = retrofit.create(APIs::class.java)
 
                 val callResultImg = api.uploadFiles(filePart1,filePart2)
 
-
                 callResultImg.enqueue(object : retrofit2.Callback<ResultImg>{
                     override fun onResponse(
                         call: Call<ResultImg>,
                         response: Response<ResultImg>
                     ) {
-                        Log.d("POST", "성공 : ${response.raw()}")
+                        Log.d("POST", "성공 : ${response.toString()}")
+                        val body = response.body()
+                        Log.d("POST", "test : ${body}")
+
                     }
 
                     override fun onFailure(call: Call<ResultImg>, t: Throwable) {
@@ -240,7 +281,10 @@ class MainActivity : AppCompatActivity() {
                     }
                 })
 
-
+                Toast.makeText(this, "${callResultImg}", Toast.LENGTH_SHORT).show()
+                //Todo
+                // 1. callResultImg -> Img file로 변환 후 imagebackground에 띄우기
+                // 2. Intent 해당 img 결과 넘기고 xml로 띄우기
 //                val imageBackground: ImageView = findViewById(R.id.imagePreView)
 //                imageBackground.setImageBitmap(resultImg.)
                 Toast.makeText(this, "파일이 전송되었습니다.", Toast.LENGTH_SHORT).show()
