@@ -4,8 +4,8 @@ import com.google.gson.annotations.SerializedName
 import java.io.File
 
 data class ResultImg(
-    @SerializedName("test")
-    val test: String
+    @SerializedName("resultImg")
+    val resultImg: String
 )
 
 

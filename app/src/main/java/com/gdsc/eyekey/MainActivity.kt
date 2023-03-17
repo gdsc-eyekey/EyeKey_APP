@@ -34,6 +34,7 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
+import android.util.Base64
 
 
 class MainActivity : AppCompatActivity() {
@@ -56,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private var recorder: MediaRecorder? = null
     private var resultUri: Uri? = null
 
+    //base64 img
+    private var resultImg: String? = null
 
 
     // 요청하고자 하는 권한들
@@ -272,24 +275,18 @@ class MainActivity : AppCompatActivity() {
                     ) {
                         Log.d("POST", "성공 : ${response.toString()}")
                         val body = response.body()?.let {
-                            val test = it.test
-                            Log.d("POST", "test : ${test}")
+                            resultImg = it.resultImg
+                            Log.d("POST", "resultImg : ${resultImg}")
+                            val imageBackground: ImageView = findViewById(R.id.imagePreView)
+                            val imageBytes = Base64.decode(resultImg, Base64.DEFAULT)
+                            val decodedImage = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                            imageBackground.setImageBitmap(decodedImage)
                         }
-
-
                     }
-
                     override fun onFailure(call: Call<ResultImg>, t: Throwable) {
                         Log.d("POST", "실패 : $t")
                     }
                 })
-
-                Toast.makeText(this, "${callResultImg}", Toast.LENGTH_SHORT).show()
-                //Todo
-                // 1. callResultImg -> Img file로 변환 후 imagebackground에 띄우기
-                // 2. Intent 해당 img 결과 넘기고 xml로 띄우기
-//                val imageBackground: ImageView = findViewById(R.id.imagePreView)
-//                imageBackground.setImageBitmap(resultImg.)
                 Toast.makeText(this, "파일이 전송되었습니다.", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "파일이 인식되지 않습니다.", Toast.LENGTH_SHORT).show()
