@@ -4,13 +4,17 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Base64
 import android.util.Log
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -34,7 +38,7 @@ import java.io.File
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
-import android.util.Base64
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity() {
@@ -48,7 +52,7 @@ class MainActivity : AppCompatActivity() {
 
     //photo
     private var mCurrentPhotoPath: String? = null
-    private var photoUri: Uri? = null
+    private var exif: ExifInterface? = null
 
     //record mp3
     private var outputPath: String? = null
@@ -116,7 +120,6 @@ class MainActivity : AppCompatActivity() {
         val ibCamera: ImageButton = findViewById(R.id.ib_camera)
         ibCamera.setOnClickListener {
             captureCamera()
-            Log.d("mCurrentPhotoPath", "${mCurrentPhotoPath}")
         }
 
         val ibMike: ImageButton = findViewById(R.id.ib_mike)
@@ -137,14 +140,13 @@ class MainActivity : AppCompatActivity() {
     @Throws(IOException::class)
     fun createImageFile(): File? { // Create an image file name
         val timeStamp: String = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
-        val imageFileName = "JPEG_$timeStamp.jpg"
+        val imageFileName = "JPEG_$timeStamp.jpeg"
         var imageFile: File? = null
         val storageDir = File(
             Environment.getExternalStorageDirectory().toString()+"/Pictures",
             "Eyekey"
         )
         if (!storageDir.exists()) {
-            Log.i("mCurrentPhotoPath", storageDir.toString())
             storageDir.mkdirs()
         }
         imageFile = File(storageDir, imageFileName)
@@ -174,6 +176,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     //카메라에서 찍은 사진 결과호출
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         when (requestCode) {
@@ -193,6 +196,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     //이미지 로컬폴더에 저장
+    @RequiresApi(Build.VERSION_CODES.Q)
     private fun galleryAddPic() {
         Log.i("galleryAddPic", "Call")
         val mediaScanIntent: Intent = Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE)
@@ -203,12 +207,61 @@ class MainActivity : AppCompatActivity() {
         sendBroadcast(mediaScanIntent)
         Toast.makeText(this, "사진이 앨범에 저장되었습니다.", Toast.LENGTH_SHORT).show()
         if(mCurrentPhotoPath != null){
+            //imagebackground에 보여주기
             val imageBackground: ImageView = findViewById(R.id.imagePreView)
             val myBitmap = BitmapFactory.decodeFile(mCurrentPhotoPath)
-            imageBackground.setImageBitmap(myBitmap)
+            val bmRotated = rotateBitmap(myBitmap, getOrientation(mCurrentPhotoPath!!))
+            imageBackground.setImageBitmap(bmRotated)
         }
     }
 
+    //get exif code and rotation orientation of photo
+    @RequiresApi(Build.VERSION_CODES.Q)
+    fun getOrientation(path: String): Int{
+        try {
+            exif = ExifInterface(File(path))
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+        val orientation = exif!!.getAttributeInt(
+            ExifInterface.TAG_ORIENTATION,
+            ExifInterface.ORIENTATION_UNDEFINED
+        )
+        return orientation
+    }
+    //img 회전 돌리기
+    fun rotateBitmap(bitmap: Bitmap, orientation: Int): Bitmap? {
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_NORMAL -> return bitmap
+            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.setScale(-1F, 1F)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.setRotate(180F)
+            ExifInterface.ORIENTATION_FLIP_VERTICAL -> {
+                matrix.setRotate(180F)
+                matrix.postScale(-1F, 1F)
+            }
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.setRotate(90F)
+                matrix.postScale(-1F, 1F)
+            }
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.setRotate(90F)
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.setRotate(-90F)
+                matrix.postScale(-1F, 1F)
+            }
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.setRotate(-90F)
+            else -> return bitmap
+        }
+        return try {
+            val bmRotated =
+                Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            bitmap.recycle()
+            bmRotated
+        } catch (e: OutOfMemoryError) {
+            e.printStackTrace()
+            null
+        }
+    }
    //음성 녹음
     private fun startRecord() {
 
@@ -217,8 +270,8 @@ class MainActivity : AppCompatActivity() {
             Environment.getExternalStorageDirectory().absolutePath + "/Download/" +fileName //내장메모리 밑에 위치
         recorder = MediaRecorder()
         recorder?.setAudioSource((MediaRecorder.AudioSource.MIC))
-        recorder?.setOutputFormat((MediaRecorder.OutputFormat.MPEG_4))
-        recorder?.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+        recorder?.setOutputFormat((MediaRecorder.OutputFormat.AMR_WB))
+        recorder?.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_WB)
         recorder?.setOutputFile(outputPath)
         if (outputPath != null) {
             soundUri = Uri.fromFile(File(outputPath))
@@ -252,14 +305,20 @@ class MainActivity : AppCompatActivity() {
                 Log.d("POST", file1.toString())
                 Log.d("POST", file2.toString())
                 val imageRequestBody1 = file1.asRequestBody("image/jpeg".toMediaTypeOrNull())
-                val audioRequestBody2 = file2.asRequestBody("audio/mpeg".toMediaTypeOrNull())
+                val audioRequestBody2 = file2.asRequestBody("audio/AMR-WB".toMediaTypeOrNull())
                 val filePart1 = MultipartBody.Part.createFormData("file1", file1.name, imageRequestBody1)
                 val filePart2 = MultipartBody.Part.createFormData("file2", file2.name, audioRequestBody2)
 
                 Log.d("POST", "${file1}")
                 var gson = GsonBuilder().setLenient().create()
+
+                val okHttpClient = OkHttpClient().newBuilder()
+                    .retryOnConnectionFailure(true)
+                    .build()
+
                 val retrofit = Retrofit.Builder()
                     .baseUrl("http://34.64.228.205:5000/")
+                    .client(okHttpClient)
                     .addConverterFactory(ScalarsConverterFactory.create())
                     .addConverterFactory(GsonConverterFactory.create(gson))
                     .build()
@@ -281,6 +340,7 @@ class MainActivity : AppCompatActivity() {
                             val imageBytes = Base64.decode(resultImg, Base64.DEFAULT)
                             val decodedImage = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
                             imageBackground.setImageBitmap(decodedImage)
+
                         }
                     }
                     override fun onFailure(call: Call<ResultImg>, t: Throwable) {
