@@ -196,9 +196,10 @@ class MainActivity : AppCompatActivity() {
             null
         }
     }
-    fun setImageBitmapWithoutRotation(imageView: ImageView, bitmap: Bitmap) {
-        val exif = ExifInterface(getContentResolver().openInputStream(uri))
-        val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED)
+    @RequiresApi(Build.VERSION_CODES.N)
+    fun setImageBitmapWithoutRotation(uri: Uri, imageView: ImageView, bitmap: Bitmap) {
+        val exif = getContentResolver().openInputStream(uri)?.let { ExifInterface(it) }
+        val orientation = exif?.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED)
         val matrix = Matrix()
         when (orientation) {
             ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90F)
@@ -397,7 +398,7 @@ class MainActivity : AppCompatActivity() {
                             val resolver = context.contentResolver
                             resultUri = getImageUri(context, decodedImage)
                             Log.d("resultURI", "성공 resultURI : ${resultUri}")
-                            setImageBitmapWithoutRotation(imageBackground, decodedImage)
+                            setImageBitmapWithoutRotation(resultUri!!,imageBackground, decodedImage)
 //                            imageBackground.setImageBitmap(rotateBitmapFile)
 //                            Glide.with(this@MainActivity).load(resultUri).into(imageBackground);
                         }
