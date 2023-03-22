@@ -48,6 +48,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 
+
 class MainActivity : AppCompatActivity() {
 
     // ViewBinding
@@ -72,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     //base64 img
     private var resultImg: String? = null
 
+    //result
 
     // 요청하고자 하는 권한들
     private val PERMISSIONS = arrayOf(
@@ -142,10 +144,6 @@ class MainActivity : AppCompatActivity() {
                 startRecord()
             } else {
                 stopRecord()
-                val imageBackground: ImageView = findViewById(R.id.imagePreView)
-                if (resultUri != null) {
-                    imageBackground.setImageURI(resultUri)
-                }
             }
         }
     }
@@ -197,6 +195,19 @@ class MainActivity : AppCompatActivity() {
             e.printStackTrace()
             null
         }
+    }
+    fun setImageBitmapWithoutRotation(imageView: ImageView, bitmap: Bitmap) {
+        val exif = ExifInterface(getContentResolver().openInputStream(uri))
+        val orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_UNDEFINED)
+        val matrix = Matrix()
+        when (orientation) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90F)
+            ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180F)
+            ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270F)
+            else -> { } // Do nothing
+        }
+        val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+        imageView.setImageBitmap(rotatedBitmap)
     }
 
     private fun dispatchTakePictureIntent() {
@@ -369,6 +380,7 @@ class MainActivity : AppCompatActivity() {
                 val callResultImg = api.uploadFiles(filePart1, filePart2)
 
                 callResultImg.enqueue(object : retrofit2.Callback<ResultImg> {
+                    @RequiresApi(Build.VERSION_CODES.Q)
                     override fun onResponse(
                         call: Call<ResultImg>,
                         response: Response<ResultImg>
@@ -379,10 +391,15 @@ class MainActivity : AppCompatActivity() {
                             Log.d("POST", "성공 resultImg : ${resultImg}")
                             val imageBackground: ImageView = findViewById(R.id.imagePreView)
                             val imageBytes = Base64.decode(resultImg, Base64.DEFAULT)
-                            val decodedImage =
-                                BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                            imageBackground.setImageBitmap(decodedImage)
+                            val decodedImage = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
 
+                            val context = getApplicationContext()
+                            val resolver = context.contentResolver
+                            resultUri = getImageUri(context, decodedImage)
+                            Log.d("resultURI", "성공 resultURI : ${resultUri}")
+                            setImageBitmapWithoutRotation(imageBackground, decodedImage)
+//                            imageBackground.setImageBitmap(rotateBitmapFile)
+//                            Glide.with(this@MainActivity).load(resultUri).into(imageBackground);
                         }
                     }
 
@@ -399,6 +416,21 @@ class MainActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "녹음 상태가 아닙니다.", Toast.LENGTH_SHORT).show()
         }
+
+        val imageBackground: ImageView = findViewById(R.id.imagePreView)
+
+
+    }
+
+    fun getImageUri(context: Context, image: Bitmap): Uri {
+        val bytes = ByteArrayOutputStream()
+        image.compress(Bitmap.CompressFormat.JPEG, 100, bytes)
+        val path = MediaStore.Images.Media.insertImage(context.contentResolver, image, "Title", null)
+        return Uri.parse(path)
+    }
+
+    fun exportUri(uri:Uri): Uri{
+        return uri
     }
 }
 
